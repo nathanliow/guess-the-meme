@@ -13,6 +13,22 @@ import {
 const signed = async (path: string | null) =>
   path ? (await admin.storage.from("logos").createSignedUrl(path, 600)).data?.signedUrl ?? null : null;
 
+// Candles never change after ingest, so each server instance fetches a token's bars once.
+// ponytail: unbounded, ~130KB/token — fine for thousands of tokens; add LRU eviction past that.
+const candleCache = new Map<number, Promise<{ series: string; bars: unknown }[]>>();
+function getCandles(tokenId: number) {
+  let hit = candleCache.get(tokenId);
+  if (!hit) {
+    hit = Promise.resolve(admin.from("candles").select("series, bars").eq("token_id", tokenId)).then(({ data, error }) => {
+      if (error) throw error;
+      return data;
+    });
+    hit.catch(() => candleCache.delete(tokenId)); // don't cache failures
+    candleCache.set(tokenId, hit);
+  }
+  return hit;
+}
+
 /** Everything the player may see for a round right now — and nothing they may not. */
 export async function roundView(roundId: string, userId: string) {
   await rpc("expire_if_due", { p_round: roundId });
@@ -30,9 +46,9 @@ export async function roundView(roundId: string, userId: string) {
   const elapsedMs = Math.min(ROUND_MS, Date.now() - Date.parse(round.started_at));
   const unlocked = new Set(ended ? STAGES.map((s) => s.key) : stagesAt(elapsedMs, tier));
 
-  const [{ data: token }, { data: candles }, { data: guesses }] = await Promise.all([
+  const [{ data: token }, candles, { data: guesses }] = await Promise.all([
     admin.from("tokens").select("*").eq("id", round.token_id).single(),
-    admin.from("candles").select("series, bars").eq("token_id", round.token_id),
+    getCandles(round.token_id),
     admin.from("guesses").select("value, correct").eq("round_id", roundId).order("created_at"),
   ]);
   if (!token) throw new HttpError(500, "token_missing");
