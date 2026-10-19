@@ -56,9 +56,10 @@ export default function Chart({ bars, supply, className = "" }: { bars: Bar[]; s
       return;
     }
 
-    // start on the previous window's bars, ease out to everything
-    const from0 = Math.max(0, bars.findIndex((b) => b[0] >= prev[0]));
-    const to0 = bars.findLastIndex((b) => b[0] <= prev[1]);
+    // start on the previous window's bars, ease out to everything. The old window can sit inside one coarser
+    // bar (hours of 15m candles → one daily candle), so always start at least one bar wide or the chart throws.
+    const from0 = Math.max(0, bars.findIndex((b) => b[0] >= prev[0])) - 0.5;
+    const to0 = Math.max(from0 + 1, bars.findLastIndex((b) => b[0] <= prev[1]) + 0.5);
     const from1 = -0.5;
     const to1 = bars.length - 0.5;
     let raf = 0;
