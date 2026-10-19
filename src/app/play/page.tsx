@@ -245,7 +245,8 @@ export default function Play() {
               <p className="mt-1 text-sm text-zinc-400">
                 {view.answer.chain}
                 {view.answer.launchpad && ` · ${view.answer.launchpad}`} · peak {fmtUsd(view.answer.peakMcap)}
-                {view.answer.pctRun != null && ` · +${Math.round(view.answer.pctRun).toLocaleString()}%`}
+                {/* under 1% = peaked at launch, or the launch pump predates the data (TRUMP) */}
+                {Number(view.answer.pctRun) >= 1 && ` · +${Math.round(Number(view.answer.pctRun)).toLocaleString()}%`}
               </p>
               {runOver ? (
                 <RunOver key={round.runId} runId={round.runId} score={run.score} rounds={round.roundNo} onAgain={start} />
